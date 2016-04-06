@@ -61,7 +61,7 @@ max(V$interval)
 
 ```
 
-Not terribly elegant, I know. But it does get the job done. If you know of a better way to do this, by all means let me know.
+Not terribly elegant, I know. But it does get the job done. If you know of a better way to do this, by all means let me know. The 835 interval gives the one you are looking for.
 
 ##Missing Values
 
