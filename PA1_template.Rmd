@@ -1,25 +1,153 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Reproducible Research - Week 1, Assignment 1"
+author: "Bruce P. L. Johnston"
+output: html_document
 ---
 
+##Loading and Processing The Data
+I hope that I will be forgiven the non-generality of this file-reading code. I attempted to use the getwd() command, pasting the working directory to the file name, and so on, but was given an error I have no idea how to correct by RStudio. If anyone knows how to do this and is willing to tell me, let me know.
 
-## Loading and preprocessing the data
+```{r, echo=TRUE}
+ActivityData <- read.csv("C:/Users/Admin/Desktop/activity.csv")
+```
+This data frame will be the primary one used throughout the assignment.
 
+Now we will begin. The first part is
 
+##Calculating the number of steps taken per day and plotting histograms
 
-## What is mean total number of steps taken per day?
+Since we are allowed to ignore missing values, this part is fairly simple. First compute the number of steps taken per day:
 
+```{r, echo = TRUE}
+library(plyr, dplyr)
+StepSums <- ddply(ActivityData, "date", summarise, Total_Steps = sum(steps, na.rm = TRUE))
 
+```
 
-## What is the average daily activity pattern?
+To make the required histogram, we use
+```{r}
+hist(StepSums$Total_Steps, xlim = c(0, 25000),ylim = c(0,20), xlab = "Total Steps", main = "Histogram - Total # of Steps", breaks = 15, col = "green")
+```
 
+I apologize in advance for the poor aspect ratio. I have not yet mastered many of the subtleties of R graphics. Any advice on how to do this would be welcome. 
 
+Now we compute the mean and median number of steps taken, which is given by
+```{r, echo=TRUE}
+MeanSteps <- mean(StepSums$Total_Steps)
+MedianSteps <- median(StepSums$Total_Steps)
+MeanSteps
+MedianSteps
 
-## Imputing missing values
+```
 
+which are 9354.23 and 10395, respectively.
 
+##Average Daily Activity Pattern
 
-## Are there differences in activity patterns between weekdays and weekends?
+To obtain the plot we need, we first use *ddply* to transform the data, then plot it:
+
+```{r, echo = TRUE}
+IntervalData <- ddply(ActivityData, "interval", summarise, MeanofSteps = mean(steps, na.rm = TRUE))
+
+plot(IntervalData, type = "l", main = "Time Series - Average Steps", xlab = "Five Minute Interval", ylab = "Mean # of Steps", asp = 3)
+```
+
+To find the maximal interval, that is, the one that contains the greatest number of steps on average, type in
+
+```{r, echo = TRUE}
+V <- subset(IntervalData, MeanofSteps == max(IntervalData$MeanofSteps))
+
+max(V$interval)
+
+```
+
+Not terribly elegant, I know. But it does get the job done. If you know of a better way to do this, by all means let me know.
+
+##Missing Values
+
+First we will calculate the total number of rows with NAs in them. A little exploration shows that there are no NAs in the "interval" and "date" columns, so we can concern ourselves with the "steps" column:
+
+```{r, echo = TRUE}
+V <- is.na(ActivityData)
+sum(V[, 2])
+sum(V[, 3])
+sum(V[, 1])
+```
+Note that we had to use column indices instead of the $ operator, as atomic vectors do not permit the use of that operator. There are 2304 missing values in the dataset. 
+
+The strategy I used in replacing the missing values was to use the mean for a given day as the replacement for the missing values. If an entire day contained nothing but NA values, I replaced the mean for that day with zero. I did this using the following code:
+
+```{r, echo=TRUE}
+Means <- ddply(ActivityData, "date", summarise, MSteps = mean(steps, na.rm= TRUE))
+
+Means$MSteps[Means$MSteps == 'NaN'] <- 0
+
+for (j in 1:nrow(ActivityData)){
+  if (is.na(ActivityData$steps[j])){
+    for (k in 1:nrow(Means)){
+      if (ActivityData$date[j] == Means$date[k]){
+        ActivityData$steps[j] <- Means$MSteps[k]
+      }
+    }
+  }
+}
+
+```
+
+If we weren't going to be working with this new dataset for the rest of the assignment, I would have made a copy. To compute the total number of steps taken per day and make a histogram of this data, we use (the mean and median are thrown in for good measure):
+
+```{r, echo = TRUE}
+NewTotals <- ddply(ActivityData, "date", summarise, Total_Steps = sum(steps))
+
+hist(NewTotals$Total_Steps, breaks = 12, xlim = c(0,25000), ylim = c(0,20), col = "green", xlab = "Total Steps", main = "Histogram - Total Steps per day")
+
+mean(NewTotals$Total_Steps)
+
+median(NewTotals$Total_Steps)
+
+```
+
+The mean and median are no different from before, nor is the histogram. This means that NA values in the original dataset are concentrated on particular days. 
+
+##Exploring weekly patterns
+
+To create the necessary factor variable to categorize weekdays versus weekends, I did the following:
+
+```{r}
+DayofWeek <- weekdays(as.POSIXlt(ActivityData$date))
+
+DayofWeek[(DayofWeek == "Saturday")] <- "Weekend" 
+DayofWeek[DayofWeek == "Sunday"] <- "Weekend"
+
+DayofWeek[DayofWeek != "Weekend"] <- "Weekday"
+
+ActivityData <- mutate(ActivityData, Type = DayofWeek)
+
+```
+
+To make the plot, we first do the necessary averaging:
+
+```{r}
+Weekends <- subset(ActivityData, Type = "Weekend")
+Weekday <- subset(ActivityData, Type = "Weekday")
+
+ WeekendAverage <- ddply(Weekends, "interval", summarise, Average = mean(steps))
+
+WeekdayAverage <- ddply(Weekday, "interval", summarise, Average = mean(steps))
+
+WeekdayAverage <- mutate(WeekdayAverage, Type = "Weekday")
+WeekendAverage <- mutate(WeekendAverage, Type = "Weekend")
+
+```
+
+Finally, we will put them back together and make a plot:
+
+```{r, echo = TRUE}
+library(lattice)
+Big <- rbind(WeekdayAverage, WeekendAverage)
+
+xyplot(Average~interval | factor(Type), data=Big, type = "l", xlab = "5 Minute Interval", ylab = "Average #of Steps", main = "Weekday vs. Weekend Activity")
+
+```
+
+As we can see, not a lot of difference here. In fact, there is so little that I wonder what is going on.  
